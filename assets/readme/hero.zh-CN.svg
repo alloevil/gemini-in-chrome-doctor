@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
   <title id="title">Gemini in Chrome Doctor</title>
-  <desc id="desc">一条从地区不匹配、Glic 宿主就绪到内嵌 Gemini 网络稳定的诊断轨迹。</desc>
+  <desc id="desc">一条在 macOS 上诊断 Ask Gemini 的轨迹，从 Glic 地区不匹配到 Chrome 宿主就绪与内嵌 Gemini 网络稳定。</desc>
 
   <defs>
     <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">

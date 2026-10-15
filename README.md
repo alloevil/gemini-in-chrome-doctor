@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Gemini in Chrome Doctor traces failures from Chrome eligibility through the embedded Gemini network path">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Gemini in Chrome Doctor for macOS diagnosing Ask Gemini, Glic location mismatch, and embedded client network failures">
 </p>
 
 <p align="center">
@@ -7,8 +7,9 @@
 </p>
 
 <p align="center">
-  A read-only-first macOS diagnostic CLI for finding the layer behind<br>
-  <em>“Gemini in Chrome isn't available.”</em>
+  <strong>Gemini in Chrome Doctor</strong> is a read-only-first macOS CLI for diagnosing<br>
+  Ask Gemini availability, Glic location mismatch, stale Chrome Variations cache,<br>
+  and embedded Gemini client network failures.
 </p>
 
 > [!IMPORTANT]
@@ -16,7 +17,7 @@
 > not a regional-bypass utility. Location repair is allowed only when the
 > detected public network country already matches the requested country.
 
-## See the failing layer
+## Diagnose Gemini in Chrome on macOS
 
 Run one command:
 
@@ -45,7 +46,7 @@ The script reports booleans, enums, country codes, versions, window/tab counts,
 and endpoint success rates. It does **not** print email addresses, account IDs,
 tab URLs, history, cookies, tokens, or Gemini conversations.
 
-## One symptom, three layers
+## Why Ask Gemini fails: one symptom, three layers
 
 Gemini in Chrome is not merely a `gemini.google.com` tab. Chromium calls its
 native host **Glic**. The host evaluates eligibility first, then loads Google's
@@ -69,7 +70,7 @@ embedded web client.
 | 5 | `LocationMismatch` | Country filtering failed |
 | 6 | `IneligibleAccount` | Account is not eligible |
 
-## Quick start
+## Install and diagnose
 
 ### Requirements
 
@@ -99,7 +100,7 @@ Useful variants:
 ./gemini-chrome-doctor.sh diagnose --skip-network-tests
 ```
 
-## Repair a stale location cache
+## Safely repair stale Chrome Variations location cache
 
 Use this only when all three statements are true:
 
@@ -141,7 +142,7 @@ variations_safe_seed_session_consistency_country
 Cookies, accounts, passwords, bookmarks, history, extensions, Chrome Sync,
 and Gemini conversations are left untouched.
 
-## Read the result, not the headline
+## Interpret Gemini in Chrome diagnostic results
 
 ### `5 · LocationMismatch`
 
@@ -222,7 +223,7 @@ cp -p \
 - Chromium preference names may change; unexpected structures cause a safe
   stop rather than a best-effort write.
 
-## Sources
+## Chromium and Google sources
 
 - [ProfileReadyState enum](https://source.chromium.org/chromium/chromium/src/+/main:out/mac-Debug/gen/chrome/browser/glic/host/glic_webui.mojom-data-view.h)
 - [Glic country filtering](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/glic/public/glic_enabling.cc)

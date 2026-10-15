@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.zh-CN.svg" width="100%" alt="Gemini in Chrome Doctor 从 Chrome 资格检查追踪到内嵌 Gemini 网络路径">
+  <img src="./assets/readme/hero.zh-CN.svg" width="100%" alt="Gemini in Chrome Doctor 在 macOS 上诊断 Ask Gemini、Glic 地区不匹配与内嵌客户端网络故障">
 </p>
 
 <p align="center">
@@ -7,15 +7,16 @@
 </p>
 
 <p align="center">
-  一个只读优先的 macOS 诊断 CLI，用来找出<br>
-  <em>“Gemini in Chrome isn't available”</em> 真正失败在哪一层。
+  <strong>Gemini in Chrome Doctor</strong> 是只读优先的 macOS CLI，用于诊断<br>
+  Gemini in Chrome / Ask Gemini 可用性、Glic 地区不匹配、过期 Chrome Variations 国家缓存<br>
+  与内嵌 Gemini 客户端网络故障。
 </p>
 
 > [!IMPORTANT]
 > 这是独立诊断工具，不是 Google 官方项目，也不是地区绕过工具。只有当前
 > 公网出口国家与目标国家完全一致时，脚本才允许修复地区缓存。
 
-## 看见真正失败的层级
+## 在 macOS 上诊断 Gemini in Chrome
 
 运行一个命令：
 
@@ -43,7 +44,7 @@ Google accounts      success=3 failure=0
 脚本只输出布尔值、枚举、国家码、版本、窗口/标签数量和端点成功率；不会输出
 邮箱、账号 ID、标签页网址、历史、Cookie、令牌或 Gemini 对话。
 
-## 一个症状，三个层级
+## Ask Gemini 为什么失败：一个症状，三个层级
 
 Gemini in Chrome 不只是一个 `gemini.google.com` 标签页。Chromium 把其原生
 宿主称为 **Glic**：宿主先检查资格，再加载 Google 的内嵌 Web 客户端。
@@ -66,7 +67,7 @@ Gemini in Chrome 不只是一个 `gemini.google.com` 标签页。Chromium 把其
 | 5 | `LocationMismatch` | 国家过滤失败 |
 | 6 | `IneligibleAccount` | 账号不符合资格 |
 
-## 快速开始
+## 安装并开始诊断
 
 ### 环境要求
 
@@ -96,7 +97,7 @@ chmod +x gemini-chrome-doctor.sh
 ./gemini-chrome-doctor.sh diagnose --skip-network-tests
 ```
 
-## 修复过期的地区缓存
+## 安全修复过期的 Chrome Variations 地区缓存
 
 仅当下面三项同时成立时使用：
 
@@ -136,7 +137,7 @@ variations_safe_seed_session_consistency_country
 
 Cookie、账号、密码、书签、历史、扩展、Chrome Sync 和 Gemini 对话都保持不变。
 
-## 读状态，不只看标题
+## 解读 Gemini in Chrome 诊断结果
 
 ### `5 · LocationMismatch`
 
@@ -205,7 +206,7 @@ cp -p \
 - 服务端故障、账号限制和企业策略不能通过修改本地缓存解决；
 - Chromium 字段可能变化；结构不符合预期时脚本会安全停止，而不是尝试写入。
 
-## 资料来源
+## Chromium 与 Google 资料来源
 
 - [ProfileReadyState 枚举](https://source.chromium.org/chromium/chromium/src/+/main:out/mac-Debug/gen/chrome/browser/glic/host/glic_webui.mojom-data-view.h)
 - [Glic 国家过滤](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/glic/public/glic_enabling.cc)

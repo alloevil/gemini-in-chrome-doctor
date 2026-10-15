@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
   <title id="title">Gemini in Chrome Doctor</title>
-  <desc id="desc">A diagnostic trace moving from location mismatch to a ready Glic host and a stable embedded Gemini network path.</desc>
+  <desc id="desc">A macOS diagnostic trace for Ask Gemini, moving from Glic location mismatch to a ready Chrome host and a stable embedded Gemini network path.</desc>
 
   <defs>
     <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
