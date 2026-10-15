@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Gemini in Chrome Doctor</title>
+  <desc id="desc">Social preview for a read-only-first macOS CLI that diagnoses Ask Gemini, Glic location mismatch, stale Chrome Variations cache, and embedded client network failures.</desc>
+
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#18212C" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0B0F14"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.6"/>
+  <path d="M696 64V576" stroke="#263444" stroke-width="2"/>
+
+  <g id="identity" transform="translate(76 76)">
+    <text x="0" y="0" fill="#38BDF8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" font-weight="700" letter-spacing="2.4">MACOS / CHROME / READ-ONLY FIRST</text>
+    <text x="0" y="104" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="72" font-weight="760">Gemini in Chrome</text>
+    <text x="0" y="184" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="72" font-weight="760">Doctor</text>
+
+    <text x="0" y="252" fill="#CBD5E1" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="28">Find the failing layer.</text>
+    <text x="0" y="292" fill="#CBD5E1" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="28">Repair only what the evidence supports.</text>
+
+    <g transform="translate(0 354)">
+      <rect width="184" height="52" rx="12" fill="#211A0E" stroke="#FBBF24"/>
+      <text x="92" y="33" text-anchor="middle" fill="#FBBF24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">LOCATION</text>
+      <rect x="200" width="160" height="52" rx="12" fill="#0D2117" stroke="#4ADE80"/>
+      <text x="280" y="33" text-anchor="middle" fill="#4ADE80" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">GLIC</text>
+      <rect x="376" width="190" height="52" rx="12" fill="#0C1D27" stroke="#38BDF8"/>
+      <text x="471" y="33" text-anchor="middle" fill="#38BDF8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">NETWORK</text>
+    </g>
+  </g>
+
+  <g id="diagnostic-proof" transform="translate(746 74)">
+    <rect width="458" height="492" rx="22" fill="#0E151D" stroke="#263444" stroke-width="2"/>
+    <circle cx="30" cy="30" r="6" fill="#FBBF24"/>
+    <circle cx="51" cy="30" r="6" fill="#4ADE80"/>
+    <circle cx="72" cy="30" r="6" fill="#38BDF8"/>
+    <text x="104" y="37" fill="#94A3B8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" letter-spacing="1.6">DIAGNOSTIC TRACE</text>
+
+    <path d="M80 116V386" stroke="#334155" stroke-width="3"/>
+
+    <circle cx="80" cy="138" r="40" fill="#211A0E" stroke="#FBBF24" stroke-width="3"/>
+    <text x="80" y="148" text-anchor="middle" fill="#FBBF24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">05</text>
+    <text x="146" y="132" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="27" font-weight="700">Location mismatch</text>
+    <text x="146" y="166" fill="#94A3B8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">stale country cache</text>
+
+    <circle cx="80" cy="270" r="40" fill="#0D2117" stroke="#4ADE80" stroke-width="3"/>
+    <text x="80" y="280" text-anchor="middle" fill="#4ADE80" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" font-weight="700">02</text>
+    <text x="146" y="264" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="27" font-weight="700">Glic host ready</text>
+    <text x="146" y="298" fill="#94A3B8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">account · policy · region</text>
+
+    <circle cx="80" cy="402" r="40" fill="#0C1D27" stroke="#38BDF8" stroke-width="3"/>
+    <text x="80" y="411" text-anchor="middle" fill="#38BDF8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700">3/3</text>
+    <text x="146" y="396" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="27" font-weight="700">Client online</text>
+    <text x="146" y="430" fill="#94A3B8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">Glic · Gemini · Accounts</text>
+  </g>
+</svg>
