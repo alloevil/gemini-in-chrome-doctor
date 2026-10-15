@@ -1,0 +1,4 @@
+.DS_Store
+*.gemini-chrome-doctor-backup-*
+*.codex-backup-*
+*.tmp
