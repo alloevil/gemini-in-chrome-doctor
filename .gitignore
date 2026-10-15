@@ -1,4 +1,5 @@
 .DS_Store
+assets/readme/.preview/
 *.gemini-chrome-doctor-backup-*
 *.codex-backup-*
 *.tmp
