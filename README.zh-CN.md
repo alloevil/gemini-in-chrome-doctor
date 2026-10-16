@@ -34,6 +34,8 @@ Ready state: 2 (Ready)
 == Variations country cache ==
 Current country: us
 Permanent country: us
+Distinct cached countries: us
+Seed country conflict: false
 
 == Network ==
 Glic status API      success=3 failure=0
@@ -137,6 +139,41 @@ variations_safe_seed_session_consistency_country
 
 Cookie、账号、密码、书签、历史、扩展、Chrome Sync 和 Gemini 对话都保持不变。
 
+### 当旧 seed 反复写回错误国家
+
+正常修复后，如果 `diagnose` 仍显示多个国家，或 Chrome 重启后又恢复到旧国家：
+
+```text
+Distinct cached countries: cn,kr
+Seed country conflict: true
+Global seed files: Variations=present VariationsSeedV2=present VariationsSafeSeedV2=present
+```
+
+说明独立的 Variations seed 文件正在回灌旧地区。这时才使用显式升级模式：
+
+```bash
+./gemini-chrome-doctor.sh repair-location \
+  --country us \
+  --apply \
+  --reset-seeds \
+  --restart
+```
+
+该模式仍会先验证真实公网国家与 `--country` 一致，然后：
+
+1. 正常退出 Chrome，拒绝强制结束进程；
+2. 备份 `Local State`；
+3. 分别备份全局 `Variations`、`VariationsSeedV2` 和
+   `VariationsSafeSeedV2`；
+4. 只删除国家与 seed 元数据，保留 crash/fetch 计数和所有 profile 数据；
+5. 删除三份已备份的全局 seed 原文件；
+6. 不使用 `--variations-override-country`，让 Chrome 从真实网络重新获取 seed；
+7. 最多等待 60 秒验证新国家码。
+
+它不会删除 profile 目录中的 seed，也不会修改 Cookie、账号、密码、书签、历史、
+扩展或 Gemini 对话。若缓存国家已全部匹配，或找不到全局 seed 文件，命令会拒绝
+执行，避免不必要的重置。
+
 ## 解读 Gemini in Chrome 诊断结果
 
 ### `5 · LocationMismatch`
@@ -157,6 +194,34 @@ Cookie、账号、密码、书签、历史、扩展、Chrome Sync 和 Gemini 对
 
 - `1`：在同一个 Chrome 配置中重新完成 Google 登录；
 - `6`：检查年龄、监督状态、Workspace 管理策略和 Gemini 账号资格。
+
+### VPS/HomeIP 出站的前置检查
+
+如果 Google/Gemini 通过 VPS 上的住宅 SOCKS/HomeIP 出站，Doctor 只能看到最终公网
+国家和端点结果，无法检查远端 Xray 路由。一个常见错误是本想只屏蔽 QUIC，却把
+Google 的整个 443 端口送进 blackhole：
+
+```json
+{
+  "domain": ["domain:google.com", "domain:googleapis.com"],
+  "port": "443",
+  "outboundTag": "block"
+}
+```
+
+若目的是强制回落 TCP，必须限定 UDP：
+
+```json
+{
+  "domain": ["domain:google.com", "domain:googleapis.com"],
+  "port": "443",
+  "network": "udp",
+  "outboundTag": "block"
+}
+```
+
+下一条相同域名规则再路由到住宅出口。否则 Gemini 网页可能偶尔可用，但 Ask Gemini
+后台的 TCP/443 会被优先拦截。先修复真实网络路径，再修复 Chrome 地区缓存。
 
 <details>
 <summary><strong>真实故障阶梯：地区缓存 → TLS 路径</strong></summary>
@@ -198,11 +263,17 @@ cp -p \
   "$HOME/Library/Application Support/Google/Chrome/Local State"
 ```
 
+`--reset-seeds` 还会为三份全局 seed 创建同后缀备份。恢复时必须先正常退出
+Chrome，再把 `Local State` 和需要的 seed 备份分别复制回原文件名。不要在 Chrome
+运行时覆盖这些文件。
+
 ## 信任边界
 
 - Cloudflare trace 只用于读取两位公网国家码；不会打印公网 IP；
 - 端点采样不携带 Chrome Cookie 或 OAuth 令牌；
 - 运行时国家覆盖是诊断手段，不是持久地区绕过方案；
+- `--reset-seeds` 不使用运行时国家覆盖，只有真实公网国家匹配时才允许重建 seed；
+- 工具不会读取 VPS 凭据，也不会自动修改远端代理路由；
 - 服务端故障、账号限制和企业策略不能通过修改本地缓存解决；
 - Chromium 字段可能变化；结构不符合预期时脚本会安全停止，而不是尝试写入。
 

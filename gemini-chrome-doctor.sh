@@ -12,8 +12,31 @@ CHROME_DATA_DIR="$DEFAULT_CHROME_DATA_DIR"
 TARGET_COUNTRY=""
 APPLY_CHANGES=false
 RESTART_CHROME=false
+RESET_VARIATIONS_SEEDS=false
 SKIP_NETWORK_TESTS=false
 NETWORK_TRIALS=5
+
+VARIATIONS_RESET_FILTER='
+  del(
+    .variations_country,
+    .variations_geo_level1,
+    .variations_google_groups,
+    .variations_last_fetch_time,
+    .variations_permanent_consistency_country,
+    .variations_safe_seed_date,
+    .variations_safe_seed_fetch_time,
+    .variations_safe_seed_locale,
+    .variations_safe_seed_milestone,
+    .variations_safe_seed_permanent_consistency_country,
+    .variations_safe_seed_session_consistency_country,
+    .variations_safe_seed_signature,
+    .variations_seed_date,
+    .variations_seed_milestone,
+    .variations_seed_serial_number,
+    .variations_seed_signature,
+    .variations_sticky_studies
+  )
+'
 
 usage() {
   cat <<'EOF'
@@ -22,6 +45,7 @@ Gemini in Chrome Doctor (macOS)
 Usage:
   gemini-chrome-doctor.sh [diagnose] [options]
   gemini-chrome-doctor.sh repair-location --country CC --apply [--restart]
+  gemini-chrome-doctor.sh repair-location --country CC --apply --reset-seeds [--restart]
 
 Commands:
   diagnose          Read-only local and network diagnosis (default).
@@ -31,6 +55,7 @@ Options:
   --country CC             Two-letter country code for repair-location.
   --apply                  Required before any configuration write.
   --restart                Gracefully restart Chrome and restore the session.
+  --reset-seeds            Back up and rebuild stale global Variations seeds.
   --trials N               Network attempts per endpoint (default: 5).
   --skip-network-tests     Skip external checks during diagnose.
   --chrome-data-dir PATH   Override the Chrome user-data directory.
@@ -39,7 +64,11 @@ Options:
 Safety:
   repair-location refuses to run unless the detected public network country
   matches --country. It creates a timestamped Local State backup and changes
-  only three Variations country fields.
+  only three Variations country fields by default.
+
+  --reset-seeds is an explicit escalation for mixed/stale seed countries that
+  repopulate the wrong location after a normal repair. It also backs up and
+  removes the global Variations seed files so Chrome can fetch a fresh seed.
 EOF
 }
 
@@ -180,6 +209,10 @@ parse_args() {
         RESTART_CHROME=true
         shift
         ;;
+      --reset-seeds)
+        RESET_VARIATIONS_SEEDS=true
+        shift
+        ;;
       --trials)
         [ "$#" -ge 2 ] || die "--trials requires a value"
         NETWORK_TRIALS="$2"
@@ -208,6 +241,10 @@ parse_args() {
     ''|*[!0-9]*) die "--trials must be a positive integer" ;;
   esac
   [ "$NETWORK_TRIALS" -gt 0 ] || die "--trials must be greater than zero"
+
+  if [ "$RESET_VARIATIONS_SEEDS" = true ] && [ "$COMMAND" != "repair-location" ]; then
+    die "--reset-seeds is only valid with repair-location"
+  fi
 }
 
 load_paths() {
@@ -231,6 +268,9 @@ diagnose() {
   local ready_name
   local exit_country
   local override_count
+  local cached_countries
+  local cached_country_count
+  local seed_name
 
   log "== Chrome =="
   if [ -x "$CHROME_EXECUTABLE" ]; then
@@ -282,6 +322,46 @@ diagnose() {
     "Failed seed fetch streak: \(.variations_failed_to_fetch_seed_streak // "unset")"
   ' "$LOCAL_STATE"
 
+  cached_countries="$(jq -r '
+    [
+      .variations_country?,
+      .variations_permanent_consistency_country[1]?,
+      .variations_safe_seed_permanent_consistency_country?,
+      .variations_safe_seed_session_consistency_country?
+    ]
+    | map(select(type == "string" and length > 0) | ascii_downcase)
+    | unique
+    | join(",")
+  ' "$LOCAL_STATE")"
+  cached_country_count="$(jq -r '
+    [
+      .variations_country?,
+      .variations_permanent_consistency_country[1]?,
+      .variations_safe_seed_permanent_consistency_country?,
+      .variations_safe_seed_session_consistency_country?
+    ]
+    | map(select(type == "string" and length > 0) | ascii_downcase)
+    | unique
+    | length
+  ' "$LOCAL_STATE")"
+  printf 'Distinct cached countries: %s\n' "${cached_countries:-none}"
+  if [ "$cached_country_count" -gt 1 ]; then
+    log 'Seed country conflict: true'
+    log 'Repair hint: use normal repair first; use --reset-seeds only if stale seed files restore the mismatch.'
+  else
+    log 'Seed country conflict: false'
+  fi
+
+  printf 'Global seed files:'
+  for seed_name in Variations VariationsSeedV2 VariationsSafeSeedV2; do
+    if [ -f "${CHROME_DATA_DIR}/${seed_name}" ]; then
+      printf ' %s=present' "$seed_name"
+    else
+      printf ' %s=absent' "$seed_name"
+    fi
+  done
+  printf '\n'
+
   if [ "$SKIP_NETWORK_TESTS" = true ]; then
     log ''
     log 'Network checks: skipped'
@@ -311,6 +391,13 @@ repair_location() {
   local original_mode
   local original_remainder_hash
   local new_remainder_hash
+  local reset_needed
+  local seed_name
+  local seed_path
+  local seed_backup
+  local seed_count=0
+  local refreshed_country=""
+  local attempt
 
   [ "$APPLY_CHANGES" = true ] \
     || die "repair-location requires --apply"
@@ -329,20 +416,43 @@ repair_location() {
   [ "$exit_country" = "$target_upper" ] || die \
     "Public network country is $exit_country, not $target_upper; refusing to modify Chrome"
 
-  jq -e '
-    (.variations_country | type) == "string" and
-    (.variations_permanent_consistency_country | type) == "array" and
-    (.variations_permanent_consistency_country | length) > 1 and
-    (.variations_safe_seed_session_consistency_country | type) == "string"
-  ' "$LOCAL_STATE" >/dev/null || die "Unexpected Variations country structure"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    jq -e 'type == "object" and (.variations_country | type) == "string"' \
+      "$LOCAL_STATE" >/dev/null || die "Unexpected Variations country structure"
+    reset_needed="$(jq -r --arg country "$target_lower" '
+      [
+        .variations_country?,
+        .variations_permanent_consistency_country[1]?,
+        .variations_safe_seed_permanent_consistency_country?,
+        .variations_safe_seed_session_consistency_country?
+      ]
+      | map(select(type == "string" and length > 0) | ascii_downcase)
+      | any(. != $country)
+    ' "$LOCAL_STATE")"
+    [ "$reset_needed" = "true" ] || die \
+      "Variations countries already match $target_lower; refusing unnecessary seed reset"
+  else
+    jq -e '
+      (.variations_country | type) == "string" and
+      (.variations_permanent_consistency_country | type) == "array" and
+      (.variations_permanent_consistency_country | length) > 1 and
+      (.variations_safe_seed_session_consistency_country | type) == "string"
+    ' "$LOCAL_STATE" >/dev/null || die "Unexpected Variations country structure"
+  fi
 
   log "Detected public country: $exit_country"
   log 'Current cache:'
   jq '{
     current_country: .variations_country,
     permanent_country: .variations_permanent_consistency_country[1],
+    safe_seed_permanent_country: .variations_safe_seed_permanent_consistency_country,
     safe_seed_session_country: .variations_safe_seed_session_consistency_country
   }' "$LOCAL_STATE"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    log 'Repair mode: reset global Variations seeds'
+  else
+    log 'Repair mode: update three country fields'
+  fi
 
   if chrome_is_running; then
     chrome_was_running=true
@@ -358,12 +468,17 @@ repair_location() {
     die "A Chrome main process is still running"
   fi
 
-  jq -e '
-    (.variations_country | type) == "string" and
-    (.variations_permanent_consistency_country | type) == "array" and
-    (.variations_permanent_consistency_country | length) > 1 and
-    (.variations_safe_seed_session_consistency_country | type) == "string"
-  ' "$LOCAL_STATE" >/dev/null || die "Variations structure changed during shutdown"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    jq -e 'type == "object" and (.variations_country | type) == "string"' \
+      "$LOCAL_STATE" >/dev/null || die "Variations structure changed during shutdown"
+  else
+    jq -e '
+      (.variations_country | type) == "string" and
+      (.variations_permanent_consistency_country | type) == "array" and
+      (.variations_permanent_consistency_country | length) > 1 and
+      (.variations_safe_seed_session_consistency_country | type) == "string"
+    ' "$LOCAL_STATE" >/dev/null || die "Variations structure changed during shutdown"
+  fi
 
   timestamp="$(date '+%Y%m%d-%H%M%S')"
   backup_path="${LOCAL_STATE}.${PROGRAM_NAME}-backup-${timestamp}"
@@ -373,33 +488,60 @@ repair_location() {
   backup_hash="$(shasum -a 256 "$backup_path" | awk '{print $1}')"
   [ "$original_hash" = "$backup_hash" ] || die "Backup hash mismatch"
 
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    for seed_name in Variations VariationsSeedV2 VariationsSafeSeedV2; do
+      seed_path="${CHROME_DATA_DIR}/${seed_name}"
+      [ -f "$seed_path" ] || continue
+      seed_backup="${seed_path}.${PROGRAM_NAME}-backup-${timestamp}"
+      [ ! -e "$seed_backup" ] || die "Seed backup already exists: $seed_backup"
+      cp -p "$seed_path" "$seed_backup"
+      [ "$(shasum -a 256 "$seed_path" | awk '{print $1}')" = \
+        "$(shasum -a 256 "$seed_backup" | awk '{print $1}')" ] \
+        || die "Seed backup hash mismatch: $seed_name"
+      seed_count=$((seed_count + 1))
+    done
+    [ "$seed_count" -gt 0 ] || die \
+      "No global Variations seed files found; use normal repair instead"
+  fi
+
   temp_path="$(mktemp "${LOCAL_STATE}.${PROGRAM_NAME}-tmp.XXXXXX")"
   trap 'if [ -n "${temp_path:-}" ] && [ -e "$temp_path" ]; then rm -f -- "$temp_path"; fi' EXIT
 
-  jq -c --arg country "$target_lower" '
-    .variations_country = $country
-    | .variations_permanent_consistency_country[1] = $country
-    | .variations_safe_seed_session_consistency_country = $country
-  ' "$LOCAL_STATE" > "$temp_path"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    jq -c "$VARIATIONS_RESET_FILTER" "$LOCAL_STATE" > "$temp_path"
+  else
+    jq -c --arg country "$target_lower" '
+      .variations_country = $country
+      | .variations_permanent_consistency_country[1] = $country
+      | .variations_safe_seed_session_consistency_country = $country
+    ' "$LOCAL_STATE" > "$temp_path"
+  fi
 
   original_mode="$(stat -f '%Lp' "$LOCAL_STATE")"
   chmod "$original_mode" "$temp_path"
   jq empty "$temp_path"
 
-  original_remainder_hash="$(jq -S '
-    del(
-      .variations_country,
-      .variations_permanent_consistency_country[1],
-      .variations_safe_seed_session_consistency_country
-    )
-  ' "$LOCAL_STATE" | shasum -a 256 | awk '{print $1}')"
-  new_remainder_hash="$(jq -S '
-    del(
-      .variations_country,
-      .variations_permanent_consistency_country[1],
-      .variations_safe_seed_session_consistency_country
-    )
-  ' "$temp_path" | shasum -a 256 | awk '{print $1}')"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    original_remainder_hash="$(jq -S "$VARIATIONS_RESET_FILTER" "$LOCAL_STATE" \
+      | shasum -a 256 | awk '{print $1}')"
+    new_remainder_hash="$(jq -S "$VARIATIONS_RESET_FILTER" "$temp_path" \
+      | shasum -a 256 | awk '{print $1}')"
+  else
+    original_remainder_hash="$(jq -S '
+      del(
+        .variations_country,
+        .variations_permanent_consistency_country[1],
+        .variations_safe_seed_session_consistency_country
+      )
+    ' "$LOCAL_STATE" | shasum -a 256 | awk '{print $1}')"
+    new_remainder_hash="$(jq -S '
+      del(
+        .variations_country,
+        .variations_permanent_consistency_country[1],
+        .variations_safe_seed_session_consistency_country
+      )
+    ' "$temp_path" | shasum -a 256 | awk '{print $1}')"
+  fi
   [ "$original_remainder_hash" = "$new_remainder_hash" ] \
     || die "Non-target configuration differs; refusing to write"
 
@@ -407,24 +549,57 @@ repair_location() {
   temp_path=""
   trap - EXIT
 
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    for seed_name in Variations VariationsSeedV2 VariationsSafeSeedV2; do
+      seed_path="${CHROME_DATA_DIR}/${seed_name}"
+      [ -f "$seed_path" ] && rm -f -- "$seed_path"
+    done
+  fi
+
   log "Backup: $backup_path"
-  log 'Updated cache:'
-  jq '{
-    current_country: .variations_country,
-    permanent_country: .variations_permanent_consistency_country[1],
-    safe_seed_session_country: .variations_safe_seed_session_consistency_country
-  }' "$LOCAL_STATE"
+  if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+    log "Seed backups: ${seed_count}"
+    log 'Country and seed cache fields cleared; Chrome must fetch a fresh seed.'
+  else
+    log 'Updated cache:'
+    jq '{
+      current_country: .variations_country,
+      permanent_country: .variations_permanent_consistency_country[1],
+      safe_seed_session_country: .variations_safe_seed_session_consistency_country
+    }' "$LOCAL_STATE"
+  fi
 
   if [ "$RESTART_CHROME" = true ]; then
-    open -a "$CHROME_APP_NAME" --args \
-      "--profile-directory=${PROFILE_DIRECTORY}" \
-      '--restore-last-session' \
-      "--variations-override-country=${target_lower}"
+    if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+      open -a "$CHROME_APP_NAME" --args \
+        "--profile-directory=${PROFILE_DIRECTORY}" \
+        '--restore-last-session'
+    else
+      open -a "$CHROME_APP_NAME" --args \
+        "--profile-directory=${PROFILE_DIRECTORY}" \
+        '--restore-last-session' \
+        "--variations-override-country=${target_lower}"
+    fi
     wait_for_chrome_start || die "Chrome did not start within 20 seconds"
-    sleep 8
-    log "Chrome session after restart: $(chrome_session_counts)"
-    log 'Runtime country override: enabled for this Chrome session only'
-    log 'Click Ask Gemini once, then rerun diagnose to read the updated state.'
+    if [ "$RESET_VARIATIONS_SEEDS" = true ]; then
+      for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        refreshed_country="$(jq -r '.variations_country // empty' "$LOCAL_STATE" 2>/dev/null || true)"
+        [ "$refreshed_country" = "$target_lower" ] && break
+        sleep 5
+      done
+      log "Chrome session after restart: $(chrome_session_counts)"
+      if [ "$refreshed_country" = "$target_lower" ]; then
+        log "Fresh Variations country: $refreshed_country"
+      else
+        warn "Chrome did not fetch $target_lower within 60 seconds; current value: ${refreshed_country:-unset}"
+      fi
+      log 'No runtime country override was used; rerun diagnose to verify the fresh seed.'
+    else
+      sleep 8
+      log "Chrome session after restart: $(chrome_session_counts)"
+      log 'Runtime country override: enabled for this Chrome session only'
+      log 'Click Ask Gemini once, then rerun diagnose to read the updated state.'
+    fi
   elif [ "$chrome_was_running" = true ]; then
     warn 'Chrome was previously running but was not restarted'
   else

@@ -35,6 +35,8 @@ Ready state: 2 (Ready)
 == Variations country cache ==
 Current country: us
 Permanent country: us
+Distinct cached countries: us
+Seed country conflict: false
 
 == Network ==
 Glic status API      success=3 failure=0
@@ -142,6 +144,46 @@ variations_safe_seed_session_consistency_country
 Cookies, accounts, passwords, bookmarks, history, extensions, Chrome Sync,
 and Gemini conversations are left untouched.
 
+### When stale seed files restore the wrong country
+
+If a normal repair succeeds but `diagnose` still reports multiple countries,
+or Chrome restores the old country after restart:
+
+```text
+Distinct cached countries: cn,kr
+Seed country conflict: true
+Global seed files: Variations=present VariationsSeedV2=present VariationsSafeSeedV2=present
+```
+
+the standalone Variations seed files are repopulating stale location state.
+Only then use the explicit escalation mode:
+
+```bash
+./gemini-chrome-doctor.sh repair-location \
+  --country us \
+  --apply \
+  --reset-seeds \
+  --restart
+```
+
+This mode still verifies that the real public-network country matches
+`--country`, then:
+
+1. gracefully exits Chrome and never force-quits it;
+2. backs up `Local State`;
+3. separately backs up global `Variations`, `VariationsSeedV2`, and
+   `VariationsSafeSeedV2`;
+4. removes only country and seed metadata while preserving crash/fetch counters
+   and all profile data;
+5. removes the three backed-up global seed originals;
+6. restarts without `--variations-override-country`, forcing a genuine seed
+   fetch through the current network;
+7. waits up to 60 seconds for the requested country code.
+
+It does not remove profile-scoped seeds or modify cookies, accounts, passwords,
+bookmarks, history, extensions, or Gemini conversations. It refuses to run if
+all cached countries already match or no global seed files exist.
+
 ## Interpret Gemini in Chrome diagnostic results
 
 ### `5 · LocationMismatch`
@@ -168,6 +210,37 @@ The native host has already passed. Inspect the endpoint trials:
 - `1`: finish Google sign-in again in the same Chrome profile;
 - `6`: inspect age, supervision, Workspace administration, and Gemini account
   eligibility.
+
+### VPS/HomeIP egress prerequisite
+
+When Google/Gemini uses a residential SOCKS or HomeIP outbound on a VPS, Doctor
+can observe only the final public country and endpoint results; it cannot audit
+the remote Xray configuration. A common routing bug is intending to block only
+QUIC while blackholing all Google traffic on port 443:
+
+```json
+{
+  "domain": ["domain:google.com", "domain:googleapis.com"],
+  "port": "443",
+  "outboundTag": "block"
+}
+```
+
+To force TCP fallback, scope that rule to UDP:
+
+```json
+{
+  "domain": ["domain:google.com", "domain:googleapis.com"],
+  "port": "443",
+  "network": "udp",
+  "outboundTag": "block"
+}
+```
+
+A following rule can then route the same domains to the residential outbound.
+Without `network: udp`, the Gemini website may appear intermittently available
+while Ask Gemini's TCP/443 backend is intercepted. Repair the real network path
+before repairing Chrome's country cache.
 
 <details>
 <summary><strong>Real-world failure ladder: location cache → TLS route</strong></summary>
@@ -211,6 +284,11 @@ cp -p \
   "$HOME/Library/Application Support/Google/Chrome/Local State"
 ```
 
+`--reset-seeds` also creates matching backups for the three global seed files.
+To restore them, gracefully exit Chrome first, then copy `Local State` and any
+required seed backups to their original filenames. Never overwrite these files
+while Chrome is running.
+
 ## Trust boundaries
 
 - Cloudflare trace is used only to read a two-letter public-country code; the
@@ -218,6 +296,9 @@ cp -p \
 - Endpoint trials carry no Chrome cookies or OAuth tokens.
 - The runtime country override is a diagnostic aid, not a persistent regional
   workaround.
+- `--reset-seeds` uses no runtime country override and is allowed only when the
+  real public country matches.
+- The tool never reads VPS credentials or modifies remote proxy routing.
 - Server outages, account restrictions, and enterprise policy cannot be fixed
   by editing local cache.
 - Chromium preference names may change; unexpected structures cause a safe
